@@ -203,3 +203,9 @@ class TestChinesePersonalInformation:
         assert "11010519491231002X" not in content
         assert "phone: " in content and "; ID: " in content
         assert messages[-1].content == text
+
+
+def test_wider_api_key_assignment_remains_detected() -> None:
+    value = "prefixprefixprefix-sk-abcdefghijklmnopqrstuv"
+    matches = detect_pii(f"api_key={value}")
+    assert any(m["type"] == "generic_api_key_assignment" and m["value"] == value for m in matches)

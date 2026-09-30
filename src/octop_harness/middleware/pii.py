@@ -44,8 +44,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from langchain.agents.middleware.pii import PIIMatch
 
-# Each entry is ``(label, compiled_pattern)``. Earlier patterns take precedence
-# over overlapping matches, so a number inside an API key is handled only once.
+# Each entry is ``(label, compiled_pattern)``. Existing key patterns take
+# precedence over personal-number matches inside their spans.
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # OpenAI project keys: ``sk-proj-XXXX...``
     ("openai_project", re.compile(r"sk-proj-[A-Za-z0-9_-]{20,}")),
@@ -107,7 +107,8 @@ def detect_pii(text: str) -> list[PIIMatch]:
     expects from a custom detector:
     ``[{"type": str, "value": str, "start": int, "end": int}, ...]``.
     Spans are returned in left-to-right order; overlapping matches from
-    different patterns are de-duplicated (first pattern wins).
+    key patterns with the same start are de-duplicated (first label wins).
+    Personal-number matches overlapping an API key are omitted.
     """
     seen_spans: list[tuple[int, int]] = []
     matches: list[dict[str, object]] = []
@@ -123,7 +124,11 @@ def detect_pii(text: str) -> list[PIIMatch]:
                 value = m.group(0)
             if label == "cn_resident_id" and not _valid_resident_id(value):
                 continue
-            if any(start < previous_end and end > previous_start for previous_start, previous_end in seen_spans):
+            if any(
+                start == previous_start
+                or (label in ("cn_mobile_phone", "cn_resident_id") and start < previous_end and end > previous_start)
+                for previous_start, previous_end in seen_spans
+            ):
                 continue
             seen_spans.append((start, end))
             matches.append({"type": label, "value": value, "start": start, "end": end})
